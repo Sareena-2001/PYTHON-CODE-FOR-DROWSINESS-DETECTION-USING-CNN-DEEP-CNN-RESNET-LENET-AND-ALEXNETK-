@@ -1,0 +1,58 @@
+# Install and load required packages
+install.packages("elmNN")
+library(elmNN)
+
+# Define the directory paths where your images are stored
+base_dir <- "/content/drive/MyDrive/archive (5)/train"
+
+# List of eye states
+eye_states <- c("Closed_Eyes", "Open_Eyes")
+
+# Initialize lists to store images and corresponding labels
+images <- list()
+labels <- character()
+
+# Load and preprocess images
+for (eye_state in eye_states) {
+  eye_state_dir <- file.path(base_dir, eye_state)
+  image_files <- list.files(eye_state_dir)
+  
+  for (file in image_files) {
+    image <- readImage(file.path(eye_state_dir, file))
+    image <- cvtColor(image, cv.COLOR_BGR2GRAY)  # Convert to grayscale
+    image <- resize(image, dim = c(128, 128))  # Resize images to a common size
+    images <- c(images, list(as.vector(image)))  # Flatten image and append to list
+    labels <- c(labels, eye_state)
+  }
+}
+
+# Convert lists to matrix
+images <- do.call(rbind, images)
+
+# Encode the labels using label encoding
+labels <- factor(labels)
+encoded_labels <- as.integer(labels)
+
+# Split the data into training and testing sets
+set.seed(42)
+split <- sample(1:nrow(images), 0.8 * nrow(images))
+X_train <- images[split, ]
+y_train <- encoded_labels[split]
+X_test <- images[-split, ]
+y_test <- encoded_labels[-split]
+
+# Define the ELM model
+elm_model <- elm(X_train, y_train, nh = 100, func = "sigmoid", classification = TRUE)
+
+# Make predictions
+predictions <- predict(elm_model, X_test)
+
+# Display classification report
+cat("Classification Report:\n")
+print(table(y_test, predictions))
+
+# Display confusion matrix
+conf_mat <- table(y_test, predictions)
+heatmap(conf_mat, Colv = NA, Rowv = NA, col = cm.colors(256), scale = "column",
+        xlab = "Predicted Label", ylab = "True Label", 
+        main = "Confusion Matrix", cex.main = 1.2, cex.axis = 1.2, cex.lab = 1.2)
