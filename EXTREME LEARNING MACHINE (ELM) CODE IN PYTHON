@@ -1,0 +1,91 @@
+import numpy as np
+import os
+import cv2
+from sklearn.preprocessing import LabelEncoder
+from sklearn.model_selection import train_test_split
+from sklearn.metrics import classification_report, confusion_matrix
+import seaborn as sns
+import matplotlib.pyplot as plt
+
+# Define the directory paths where your images are stored
+base_dir = '/content/drive/MyDrive/archive (5)/train'
+
+# List of eye states
+eye_states = ['Closed_Eyes', 'Open_Eyes']
+
+# Initialize lists to store images and corresponding labels
+images = []
+labels = []
+
+# Load and preprocess images
+for eye_state in eye_states:
+    eye_state_dir = os.path.join(base_dir, eye_state)
+    image_files = os.listdir(eye_state_dir)
+
+    for file in image_files:
+        image = cv2.imread(os.path.join(eye_state_dir, file))
+        image = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)  # Convert to grayscale
+        image = cv2.resize(image, (128, 128))  # Resize images to a common size
+        images.append(image.flatten())  # Flatten image and append to list
+        labels.append(eye_state)
+
+# Convert lists to numpy arrays
+images = np.array(images)
+labels = np.array(labels)
+
+# Initialize a LabelEncoder to encode eye states
+label_encoder = LabelEncoder()
+encoded_labels = label_encoder.fit_transform(labels)
+
+# Split the data into training and testing sets
+X_train, X_test, y_train, y_test = train_test_split(images, encoded_labels, test_size=0.2, random_state=42)
+
+# Define the ELM model
+class ELMClassifier:
+    def __init__(self, input_size, hidden_size, output_size):
+        self.input_size = input_size
+        self.hidden_size = hidden_size
+        self.output_size = output_size
+        self.input_weights = np.random.rand(input_size, hidden_size)  # Random initialization of input weights
+        self.bias = np.random.rand(hidden_size)  # Random initialization of bias
+        self.output_weights = None
+
+    def _sigmoid(self, x):
+        return 1 / (1 + np.exp(-x))
+
+    def train(self, X, Y):
+        # Calculate hidden layer output
+        H = self._sigmoid(np.dot(X, self.input_weights) + self.bias)
+        
+        # Calculate output weights using Moore-Penrose pseudoinverse
+        self.output_weights = np.dot(np.linalg.pinv(H), Y)
+
+    def predict(self, X):
+        # Calculate hidden layer output
+        H = self._sigmoid(np.dot(X, self.input_weights) + self.bias)
+        
+        # Calculate predicted output
+        predicted_output = np.dot(H, self.output_weights)
+        return np.argmax(predicted_output, axis=1)
+
+# Initialize the ELM model
+elm = ELMClassifier(input_size=X_train.shape[1], hidden_size=100, output_size=len(np.unique(y_train)))
+
+# Train the ELM model
+elm.train(X_train, np.eye(len(np.unique(y_train)))[y_train])
+
+# Make predictions
+y_pred = elm.predict(X_test)
+
+# Display classification report
+print("Classification Report:")
+print(classification_report(y_test, y_pred, target_names=label_encoder.classes_))
+
+# Display confusion matrix
+conf_mat = confusion_matrix(y_test, y_pred)
+plt.figure(figsize=(8, 6))
+sns.heatmap(conf_mat, annot=True, fmt='d', cmap='Blues', xticklabels=label_encoder.classes_, yticklabels=label_encoder.classes_)
+plt.xlabel('Predicted Label')
+plt.ylabel('True Label')
+plt.title('Confusion Matrix')
+plt.show()
